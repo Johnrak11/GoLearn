@@ -1,0 +1,235 @@
+**My advice for a 3-month deadline:**
+If you know JavaScript, go with **Node.js + Prisma**. If you know PHP, go with **Laravel**. Both work perfectly with Docker and MariaDB.
+
+---
+
+### 2. Database Analysis (Schema Design)
+
+Based on the modules in your image, here is a recommended database structure for **MariaDB**.
+
+#### A. Users & Authentication
+
+* **`users`**
+* `id` (PK, UUID or Auto-increment)
+* `email` (Unique)
+* `password_hash`
+* `full_name`
+* `role` (ENUM: 'student', 'instructor', 'admin')
+* `avatar_url`
+* `created_at`
+
+
+
+#### B. Course Management
+
+* **`courses`**
+* `id` (PK)
+* `instructor_id` (FK -> users.id)
+* `title`
+* `description`
+* `thumbnail_url`
+* `price` (Decimal)
+* `is_published` (Boolean)
+* `created_at`
+
+
+* **`modules`** (Courses are broken down into modules/chapters)
+* `id` (PK)
+* `course_id` (FK -> courses.id)
+* `title`
+* `order_index` (To sort modules 1, 2, 3...)
+
+
+* **`lessons`** (The actual content inside modules)
+* `id` (PK)
+* `module_id` (FK -> modules.id)
+* `title`
+* `type` (ENUM: 'video', 'text', 'quiz')
+* `video_url` (For the Video Player Integration)
+* `duration_seconds`
+* `order_index`
+
+
+
+#### C. Enrollment & Progress
+
+* **`enrollments`** (Links Students to Courses)
+* `id` (PK)
+* `user_id` (FK)
+* `course_id` (FK)
+* `payment_status` (ENUM: 'paid', 'pending', 'free')
+* `transaction_id` (From Payment Gateway)
+* `enrolled_at`
+
+
+* **`lesson_progress`** (Progress Tracker)
+* `id` (PK)
+* `enrollment_id` (FK)
+* `lesson_id` (FK)
+* `is_completed` (Boolean)
+* `last_watched_position` (Integer, seconds - to resume video)
+
+
+
+#### D. Quiz System
+
+* **`quizzes`**
+* `id` (PK)
+* `lesson_id` (FK - if the quiz is part of a lesson)
+* `title`
+* `passing_score`
+
+
+* **`questions`**
+* `id` (PK)
+* `quiz_id` (FK)
+* `question_text`
+* `type` (ENUM: 'multiple_choice', 'true_false')
+
+
+* **`options`**
+* `id` (PK)
+* `question_id` (FK)
+* `option_text`
+* `is_correct` (Boolean)
+
+
+* **`quiz_attempts`**
+* `id` (PK)
+* `user_id` (FK)
+* `quiz_id` (FK)
+* `score`
+* `passed` (Boolean)
+* `attempted_at`
+
+
+
+#### E. Forum & Logs
+
+* **`forum_posts`**
+* `id` (PK)
+* `course_id` (FK)
+* `user_id` (FK)
+* `parent_id` (FK, Nullable - for replies)
+* `content`
+* `created_at`
+
+
+* **`activity_logs`**
+* `id` (PK)
+* `user_id` (FK)
+* `action` (String e.g., "enrolled_course", "finished_quiz")
+* `metadata` (JSON - optional details)
+* `created_at`
+
+
+
+---
+
+### 3. API Scope & Documentation (Swagger/OpenAPI)
+
+Since you need to document the API, you should define your "Resources" clearly. Here is the checklist of endpoints you need to build:
+
+| Resource | Key Endpoints (Methods) | Description |
+| --- | --- | --- |
+| **Auth** | `POST /auth/login`, `POST /auth/register` | Returns JWT Token. |
+| **Profile** | `GET /profile`, `PUT /profile` | Get or update current user info. |
+| **Courses** | `GET /courses`, `GET /courses/{id}` | List courses (with search/filter) and course details. |
+| **Content** | `GET /courses/{id}/curriculum` | Returns the tree of Modules -> Lessons -> Videos. |
+| **Enroll** | `POST /enrollments` | Purchase/Enroll in a course. |
+| **Progress** | `POST /progress/update` | Mark lesson as complete or update video timestamp. |
+| **Quiz** | `GET /quizzes/{id}`, `POST /quizzes/{id}/submit` | Fetch questions, Submit answers & get score. |
+| **Forum** | `GET /courses/{id}/forum`, `POST /forum` | Read and write comments. |
+
+**Tip:** Use **Swagger UI**. It automatically creates a website where your Mobile App teammates can see the URL, parameters, and test the API without asking you questions every 5 minutes.
+
+---
+
+### 4. Hosting & Server Setup (Docker + SSL)
+
+You have a domain, a server with Docker, and MariaDB. Here is the architecture you should set up:
+
+**The Architecture:**
+
+1. **Docker Container 1: MariaDB** (Database - you already have this).
+2. **Docker Container 2: Backend API** (Your Node.js or Laravel app).
+3. **Docker Container 3: Nginx (Reverse Proxy)**.
+
+
+
+
+Based on your project description and the modules provided in the image, here is a detailed **Scope and Feature Analysis**. This will serve as your roadmap for the next 3 months.
+
+Since you are a team of three, I have categorized the scope into **Core (Must-Have)** and **Secondary (Should-Have)** to help you manage the deadline.
+
+---
+
+## 1. Functional Scope Analysis
+
+### A. User Management & Access Control
+
+* **Role-Based Access Control (RBAC):** This is the "brain" of your app.
+* **Students:** Can browse, enroll, watch videos, take quizzes, and track their own progress.
+* **Instructors:** Can create courses, upload video content, and manage quiz questions.
+
+
+* **Auth System:** Secure Sign-up, Login (using JWT for mobile), and Profile Management (uploading avatars, changing passwords).
+
+### B. Course & Content Delivery
+
+* **Hierarchical Content:** You must support a structure of `Course -> Module -> Lesson`.
+* **Video Streaming:** Integration of a video player. For the backend, this means storing metadata (URLs) for videos hosted on a storage service (like AWS S3 or even YouTube/Vimeo embeds).
+* **Search & Discovery:** A search engine to find courses by title, category, or instructor name.
+
+### C. Engagement & Evaluation
+
+* **Dynamic Quiz System:** The ability to serve multiple-choice questions and calculate scores immediately upon submission.
+* **Progress Tracker:** A logic-heavy feature where the backend marks a lesson as "Complete" only after the video is finished or the quiz is passed.
+* **Interactive Forum:** A nested commenting system (Threaded Q&A) for each course so students can help each other.
+
+### D. Operational Features
+
+* **Payment Gateway:** Integration (e.g., Stripe, PayPal, or a local gateway) to unlock courses after a successful transaction.
+* **Notifications:** Push notifications for mobile (using Firebase) for "New Course Added" or "Quiz Due Soon."
+* **Activity Logs:** A background "audit trail" that records every time a user logs in, starts a quiz, or finishes a module.
+
+---
+
+## 2. Technical Architecture Scope
+
+To give your team a clear vision of how the data flows, here is a representation of the system architecture:
+
+---
+
+## 3. Feature Breakdown Table (The 3-Month Plan)
+
+| Phase | Category | Feature | Priority |
+| --- | --- | --- | --- |
+| **Month 1** | **Foundation** | User Authentication (JWT), Profile CRUD, Role Setup. | High |
+|  | **Core Data** | Course & Module CRUD (Instructor side), Category Search. | High |
+| **Month 2** | **Learning Flow** | Video Player integration, Progress Tracking logic. | High |
+|  | **Assessment** | Quiz Engine (Question/Answer/Scoring logic). | Medium |
+| **Month 3** | **Operations** | Payment Gateway integration, Activity Logging. | Medium |
+|  | **Polishing** | Push Notifications, API Documentation (Swagger), Final Deployment. | Low |
+
+---
+
+## 4. Database Schema Visualization
+
+For your Database Analysis, here is how the primary tables will relate to each other. This is crucial for your MariaDB setup:
+
+---
+
+## 5. Implementation Strategy (The "Lead" Role)
+
+As the Backend Lead, your scope includes:
+
+1. **Environment Parity:** Ensuring your Docker container on the server matches your local development environment.
+2. **API Performance:** Using **Indexing** in MariaDB for the `Course Catalog & Search` feature so search results are fast.
+3. **Security:** * Validating that a student cannot access `Lesson B` if they haven't finished `Lesson A`.
+* Ensuring only the "Instructor" who owns a course can edit it.
+
+
+4. **Documentation:** Since your teammates are building the Android app, your Swagger/Postman documentation must be updated daily so they know which endpoints to call.
+
+**Would you like me to generate a `docker-compose.yml` file specifically configured for your MariaDB and a Node/NestJS backend to get you started?**
