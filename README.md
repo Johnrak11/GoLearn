@@ -67,6 +67,9 @@ Apply the Prisma schema to your database:
 # Push schema changes to the database
 npx prisma db push
 
+# resetting your database
+npx prisma migrate reset
+
 # OR create a migration file (recommended for production)
 npx prisma migrate dev --name init
 ```
