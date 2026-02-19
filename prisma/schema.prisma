@@ -1,0 +1,543 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+  engineType = "library"
+}
+
+datasource db {
+  provider = "mysql"
+  url      = env("DATABASE_URL")
+}
+
+// ==========================================
+// 1. User Management & Auth (RBAC)
+// ==========================================
+
+model User {
+  id              String    @id @default(uuid())
+  email           String    @unique
+  password_hash   String
+  full_name       String
+  headline        String?   // e.g. "Senior Software Engineer"
+  bio             String?   @db.Text
+  avatar_url      String?
+  timezone        String?   @default("UTC")
+  
+  is_verified     Boolean   @default(false)
+  mfa_enabled     Boolean   @default(false)
+  status          UserStatus @default(ACTIVE)
+  
+  created_at      DateTime  @default(now())
+  updated_at      DateTime  @updatedAt
+
+  // Relations
+  roles           UserRole[]
+  enrollments     Enrollment[]
+  orders          Order[]
+  reviews         Review[]
+  forum_posts     ForumPost[]
+  quiz_attempts   QuizAttempt[]
+  activity_logs   ActivityLog[]
+  notifications   Notification[]
+  instructor_courses Course[] @relation("InstructorCourses")
+  refresh_tokens  RefreshToken[]
+  wishlist        Wishlist[]
+  certificates    Certificate[]
+  
+  // Sales Relations
+  coupon_redemptions CouponRedemption[]
+}
+
+enum UserStatus {
+  ACTIVE
+  INACTIVE
+  BANNED
+  PENDING
+}
+
+model Role {
+  id          String   @id @default(uuid())
+  name        String   @unique // e.g. "admin", "instructor", "student"
+  description String?
+  
+  users       UserRole[]
+  permissions RolePermission[]
+}
+
+model Permission {
+  id          String   @id @default(uuid())
+  action      String   // e.g. "create:course", "delete:user"
+  description String?
+  
+  roles       RolePermission[]
+}
+
+model UserRole {
+  user_id     String
+  role_id     String
+  assigned_at DateTime @default(now())
+
+  user        User     @relation(fields: [user_id], references: [id], onDelete: Cascade)
+  role        Role     @relation(fields: [role_id], references: [id], onDelete: Cascade)
+
+  @@id([user_id, role_id])
+}
+
+model RolePermission {
+  role_id       String
+  permission_id String
+  
+  role          Role       @relation(fields: [role_id], references: [id], onDelete: Cascade)
+  permission    Permission @relation(fields: [permission_id], references: [id], onDelete: Cascade)
+
+  @@id([role_id, permission_id])
+}
+
+model RefreshToken {
+  id          String   @id @default(uuid())
+  user_id     String
+  token       String   @unique @db.VarChar(500)
+  expires_at  DateTime
+  created_at  DateTime @default(now())
+  is_revoked  Boolean  @default(false)
+
+  user        User     @relation(fields: [user_id], references: [id], onDelete: Cascade)
+}
+
+// ==========================================
+// 2. Course & Content Management
+// ==========================================
+
+model Course {
+  id              String    @id @default(uuid())
+  instructor_id   String
+  title           String
+  slug            String    @unique // SEO friendly URL
+  description     String?   @db.Text
+  thumbnail_url   String?
+  price           Decimal   @default(0.00) @db.Decimal(10, 2)
+  compare_at_price Decimal? @db.Decimal(10, 2) // Original price before discount
+  
+  language        String    @default("en")
+  level           CourseLevel @default(BEGINNER)
+  status          CourseStatus @default(DRAFT)
+  
+  created_at      DateTime  @default(now())
+  updated_at      DateTime  @updatedAt
+
+  // Relations
+  instructor      User      @relation("InstructorCourses", fields: [instructor_id], references: [id])
+  modules         Module[]
+  enrollments     Enrollment[]
+  reviews         Review[]
+  forum_posts     ForumPost[]
+  wishlisted_by   Wishlist[]
+  tags            CourseTag[]
+  order_items     OrderItem[]
+  
+  @@index([instructor_id])
+  @@index([status])
+}
+
+enum CourseLevel {
+  BEGINNER
+  INTERMEDIATE
+  ADVANCED
+  ALL_LEVELS
+}
+
+enum CourseStatus {
+  DRAFT
+  PUBLISHED
+  ARCHIVED
+}
+
+model Tag {
+  id    String      @id @default(uuid())
+  name  String      @unique
+  courses CourseTag[]
+}
+
+model CourseTag {
+  course_id String
+  tag_id    String
+  
+  course    Course @relation(fields: [course_id], references: [id], onDelete: Cascade)
+  tag       Tag    @relation(fields: [tag_id], references: [id], onDelete: Cascade)
+  
+  @@id([course_id, tag_id])
+}
+
+model Module {
+  id          String   @id @default(uuid())
+  course_id   String
+  title       String
+  order_index Int
+  
+  lessons     Lesson[]
+  
+  course      Course   @relation(fields: [course_id], references: [id], onDelete: Cascade)
+}
+
+model Lesson {
+  id               String      @id @default(uuid())
+  module_id        String
+  title            String
+  type             LessonType
+  order_index      Int
+  is_free_preview  Boolean     @default(false)
+  
+  // Content Relations
+  video            Video?
+  resources        Resource[]
+  quiz             Quiz?
+  
+  // Tracking
+  progress         LessonProgress[]
+  
+  module           Module      @relation(fields: [module_id], references: [id], onDelete: Cascade)
+}
+
+enum LessonType {
+  VIDEO
+  TEXT
+  QUIZ
+  PDF
+}
+
+model Video {
+  id              String   @id @default(uuid())
+  lesson_id       String   @unique
+  
+  provider        VideoProvider // e.g. MUX, VIMEO, S3, YOUTUBE
+  external_id     String?  // ID from the provider (e.g. Mux Asset ID)
+  url             String?  // Direct URL if S3 or public
+  playback_id     String?  // Specific for streaming services
+  
+  duration        Int      @default(0) // in seconds
+  status          VideoStatus @default(PROCESSING)
+  
+  lesson          Lesson   @relation(fields: [lesson_id], references: [id], onDelete: Cascade)
+}
+
+enum VideoProvider {
+  MUX
+  VIMEO
+  YOUTUBE
+  S3
+  CLOUDFLARE
+}
+
+enum VideoStatus {
+  PROCESSING
+  READY
+  FAILED
+}
+
+model Resource {
+  id          String   @id @default(uuid())
+  lesson_id   String
+  title       String
+  file_url    String
+  file_type   String   // e.g. "pdf", "zip"
+  file_size   Int?     // in bytes
+  
+  lesson      Lesson   @relation(fields: [lesson_id], references: [id], onDelete: Cascade)
+}
+
+// ==========================================
+// 3. Learning & Assessment
+// ==========================================
+
+model Enrollment {
+  id             String        @id @default(uuid())
+  user_id        String
+  course_id      String
+  
+  status         EnrollmentStatus @default(ACTIVE)
+  progress_pct   Float         @default(0.0)
+  
+  enrolled_at    DateTime      @default(now())
+  completed_at   DateTime?
+  
+  // Relations
+  user           User             @relation(fields: [user_id], references: [id])
+  course         Course           @relation(fields: [course_id], references: [id])
+  lesson_progress LessonProgress[]
+  certificate    Certificate?
+  
+  @@unique([user_id, course_id])
+}
+
+enum EnrollmentStatus {
+  ACTIVE
+  COMPLETED
+  DROPPED
+  EXPIRED
+}
+
+model LessonProgress {
+  id                    String  @id @default(uuid())
+  enrollment_id         String
+  lesson_id             String
+  
+  is_completed          Boolean @default(false)
+  last_watched_position Int     @default(0) // seconds
+  updated_at            DateTime @updatedAt
+
+  enrollment Enrollment @relation(fields: [enrollment_id], references: [id], onDelete: Cascade)
+  lesson     Lesson     @relation(fields: [lesson_id], references: [id], onDelete: Cascade)
+
+  @@unique([enrollment_id, lesson_id])
+}
+
+model Quiz {
+  id            String   @id @default(uuid())
+  lesson_id     String   @unique
+  title         String
+  passing_score Int      @default(70) // percentage
+  
+  questions     Question[]
+  attempts      QuizAttempt[]
+  
+  lesson        Lesson   @relation(fields: [lesson_id], references: [id], onDelete: Cascade)
+}
+
+model Question {
+  id            String       @id @default(uuid())
+  quiz_id       String
+  prompt        String       @db.Text
+  type          QuestionType
+  points        Int          @default(1)
+  
+  options       Option[]
+  
+  quiz          Quiz         @relation(fields: [quiz_id], references: [id], onDelete: Cascade)
+}
+
+enum QuestionType {
+  MULTIPLE_CHOICE
+  TRUE_FALSE
+  SINGLE_CHOICE
+}
+
+model Option {
+  id          String  @id @default(uuid())
+  question_id String
+  text        String
+  is_correct  Boolean @default(false)
+  
+  question    Question @relation(fields: [question_id], references: [id], onDelete: Cascade)
+}
+
+model QuizAttempt {
+  id           String   @id @default(uuid())
+  user_id      String
+  quiz_id      String
+  
+  score        Int
+  passed       Boolean
+  answers_json Json?    // Store user answers for review
+  
+  attempted_at DateTime @default(now())
+
+  user         User     @relation(fields: [user_id], references: [id])
+  quiz         Quiz     @relation(fields: [quiz_id], references: [id])
+}
+
+model Certificate {
+  id            String   @id @default(uuid())
+  enrollment_id String   @unique
+  user_id       String
+  
+  code          String   @unique // verification code
+  issued_at     DateTime @default(now())
+  pdf_url       String?
+  
+  enrollment    Enrollment @relation(fields: [enrollment_id], references: [id])
+  user          User       @relation(fields: [user_id], references: [id])
+}
+
+// ==========================================
+// 4. Sales, Payments & Marketing
+// ==========================================
+
+model Order {
+  id              String      @id @default(uuid())
+  user_id         String
+  
+  total_amount    Decimal     @db.Decimal(10, 2)
+  currency        String      @default("USD")
+  status          OrderStatus @default(PENDING)
+  
+  payment_intent_id String?   // Stripe PaymentIntent ID
+  created_at      DateTime    @default(now())
+  updated_at      DateTime    @updatedAt
+  
+  // Relations
+  user            User        @relation(fields: [user_id], references: [id])
+  items           OrderItem[]
+  payment         Payment?
+  coupon_redemption CouponRedemption?
+}
+
+enum OrderStatus {
+  PENDING
+  COMPLETED
+  FAILED
+  REFUNDED
+  CANCELLED
+}
+
+model OrderItem {
+  id          String  @id @default(uuid())
+  order_id    String
+  course_id   String
+  price       Decimal @db.Decimal(10, 2) // Snapshot of price at time of purchase
+  
+  order       Order   @relation(fields: [order_id], references: [id], onDelete: Cascade)
+  course      Course  @relation(fields: [course_id], references: [id])
+}
+
+model Payment {
+  id              String        @id @default(uuid())
+  order_id        String        @unique
+  provider        PaymentProvider
+  transaction_id  String        @unique // Stripe Charge ID / PayPal ID
+  amount          Decimal       @db.Decimal(10, 2)
+  status          PaymentStatus @default(PENDING)
+  receipt_url     String?
+  
+  created_at      DateTime      @default(now())
+  
+  order           Order         @relation(fields: [order_id], references: [id])
+}
+
+enum PaymentProvider {
+  STRIPE
+  PAYPAL
+  OFFLINE
+}
+
+enum PaymentStatus {
+  PENDING
+  SUCCESS
+  FAILED
+  REFUNDED
+}
+
+model Coupon {
+  id              String    @id @default(uuid())
+  code            String    @unique
+  discount_type   DiscountType
+  discount_value  Decimal   @db.Decimal(10, 2) // 10.00 or 15 (percent)
+  
+  start_date      DateTime?
+  end_date        DateTime?
+  usage_limit     Int?
+  used_count      Int       @default(0)
+  
+  is_active       Boolean   @default(true)
+  
+  redemptions     CouponRedemption[]
+}
+
+enum DiscountType {
+  PERCENTAGE
+  FIXED_AMOUNT
+}
+
+model CouponRedemption {
+  id        String   @id @default(uuid())
+  coupon_id String
+  order_id  String   @unique
+  user_id   String
+  
+  redeemed_at DateTime @default(now())
+  
+  coupon    Coupon   @relation(fields: [coupon_id], references: [id])
+  order     Order    @relation(fields: [order_id], references: [id])
+  user      User     @relation(fields: [user_id], references: [id])
+}
+
+model Wishlist {
+  id        String   @id @default(uuid())
+  user_id   String
+  course_id String
+  added_at  DateTime @default(now())
+  
+  user      User     @relation(fields: [user_id], references: [id], onDelete: Cascade)
+  course    Course   @relation(fields: [course_id], references: [id], onDelete: Cascade)
+  
+  @@unique([user_id, course_id])
+}
+
+// ==========================================
+// 5. Community & Support
+// ==========================================
+
+model Review {
+  id        String   @id @default(uuid())
+  user_id   String
+  course_id String
+  rating    Int      // 1-5
+  comment   String?  @db.Text
+  
+  created_at DateTime @default(now())
+  
+  user      User     @relation(fields: [user_id], references: [id])
+  course    Course   @relation(fields: [course_id], references: [id])
+  
+  @@unique([user_id, course_id])
+}
+
+model ForumPost {
+  id         String   @id @default(uuid())
+  course_id  String
+  user_id    String
+  parent_id  String?
+  
+  title      String?
+  content    String   @db.Text
+  
+  created_at DateTime @default(now())
+  updated_at DateTime @updatedAt
+
+  course     Course      @relation(fields: [course_id], references: [id], onDelete: Cascade)
+  user       User        @relation(fields: [user_id], references: [id])
+  parent     ForumPost?  @relation("Thread", fields: [parent_id], references: [id])
+  children   ForumPost[] @relation("Thread")
+}
+
+// ==========================================
+// 6. System Logs & Notifications
+// ==========================================
+
+model Notification {
+  id          String   @id @default(uuid())
+  user_id     String
+  type        String   // e.g. "COURSE_UPDATE", "QUIZ_RESULT"
+  title       String
+  message     String
+  is_read     Boolean  @default(false)
+  metadata    Json?
+  
+  created_at  DateTime @default(now())
+  
+  user        User     @relation(fields: [user_id], references: [id], onDelete: Cascade)
+}
+
+model ActivityLog {
+  id         String   @id @default(uuid())
+  user_id    String?
+  action     String   // e.g. "LOGIN", "PURCHASE"
+  ip_address String?
+  user_agent String?
+  metadata   Json?
+  
+  created_at DateTime @default(now())
+  
+  user       User?    @relation(fields: [user_id], references: [id])
+}
