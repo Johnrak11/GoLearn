@@ -6,7 +6,6 @@ import prisma from "../config/prisma";
 import {
   createCourseService,
   listPublishedCoursesService,
-  getCourseCurriculumService,
 } from "../services/courseService";
 
 const JWT_SECRET = process.env.JWT_SECRET || "supersecretkey";
@@ -17,6 +16,62 @@ const createCourseSchema = z.object({
   price: z.number().min(0),
   thumbnail_url: z.string().url().optional(),
 });
+
+// =============================================
+// Shared helper: transform a raw Prisma course
+// into the unified JSON format for Web & Mobile
+// =============================================
+function formatCourse(course: any) {
+  // Calculate average instructor rating from reviews
+  const totalRating = (course.reviews || []).reduce(
+    (acc: number, review: any) => acc + review.rating,
+    0,
+  );
+  const avgRating =
+    course.reviews?.length > 0
+      ? parseFloat((totalRating / course.reviews.length).toFixed(1))
+      : 0.0;
+
+  return {
+    id: course.id,
+    course_image: course.thumbnail_url || "",
+    preview_video: course.thumbnail_url || "",
+    title: course.title,
+    description: course.description || "",
+    instructor: {
+      name: course.instructor?.full_name || "",
+      rating: avgRating,
+    },
+    curriculum: (course.modules || []).map((module: any) => ({
+      module_id: module.order_index,
+      title: module.title,
+      lessons: (module.lessons || []).map((lesson: any) => ({
+        id: lesson.id,
+        title: lesson.title,
+        type: lesson.type.toLowerCase(),
+        duration_minutes: lesson.video
+          ? Math.round(lesson.video.duration / 60)
+          : 0,
+        video_url: lesson.video?.url || "",
+        ...(lesson.resources?.length > 0 && {
+          resources: lesson.resources.map((r: any) => r.title),
+        }),
+      })),
+    })),
+    pricing: {
+      amount: Number(course.price),
+      currency: "USD",
+      discount_available: course.compare_at_price
+        ? Number(course.compare_at_price) > Number(course.price)
+        : false,
+    },
+    tags: (course.tags || []).map((t: any) => t.tag?.name || t.name),
+  };
+}
+
+// =============================================
+// Controllers
+// =============================================
 
 export const createCourse = async (req: AuthRequest, res: Response) => {
   try {
@@ -32,12 +87,6 @@ export const createCourse = async (req: AuthRequest, res: Response) => {
 
     const { title, description, price, thumbnail_url } =
       createCourseSchema.parse(req.body);
-
-    // Auto-generate slug from title
-    const slug = title
-      .toLowerCase()
-      .replace(/ /g, "-")
-      .replace(/[^\w-]+/g, "");
 
     const course = await createCourseService({
       instructorId: req.user.userId,
@@ -57,98 +106,114 @@ export const createCourse = async (req: AuthRequest, res: Response) => {
   }
 };
 
+/**
+ * GET /api/courses
+ * List all published courses — unified format for Web & Mobile
+ */
 export const getCourses = async (req: Request, res: Response) => {
   try {
-    const { search, category, format } = req.query;
+    const { search, category } = req.query;
 
     const courses = await listPublishedCoursesService(
       search as string | undefined,
       category as string | undefined,
     );
 
-    // If mobile format requested, transform the response
-    if (format === "mobile") {
-      const mobileCourses = courses.map((course: any) => {
-        const totalRating = course.reviews.reduce(
-          (acc: number, review: any) => acc + review.rating,
-          0,
-        );
-        const avgRating =
-          course.reviews.length > 0
-            ? parseFloat((totalRating / course.reviews.length).toFixed(1))
-            : 0.0;
-
-        return {
-          id: course.id,
-          course_image: course.thumbnail_url || "",
-          preview_video: course.thumbnail_url || "",
-          title: course.title,
-          instructor: {
-            name: course.instructor.full_name,
-            rating: avgRating,
-          },
-          curriculum: course.modules.map((module: any) => ({
-            module_id: module.id,
-            title: module.title,
-            lessons: module.lessons.map((lesson: any) => ({
-              id: lesson.id,
-              title: lesson.title,
-              type: lesson.type.toLowerCase(),
-              duration_minutes: lesson.video
-                ? Math.round(lesson.video.duration / 60)
-                : 0,
-              video_url: lesson.video?.url || "",
-              resources: lesson.resources?.map((r: any) => r.file_url) || [],
-            })),
-          })),
-          pricing: {
-            amount: Number(course.price),
-            currency: "USD",
-            discount_available: course.compare_at_price
-              ? Number(course.compare_at_price) > Number(course.price)
-              : false,
-          },
-          tags: course.tags.map((t: any) => t.tag.name),
-        };
-      });
-
-      res.json(mobileCourses);
-      return;
-    }
-
-    // Default: return standard web format
-    res.json(courses);
+    // Always return the unified format
+    const formatted = courses.map(formatCourse);
+    res.json(formatted);
   } catch (error) {
     res.status(500).json({ error: "Internal server error" });
   }
 };
 
+/**
+ * GET /api/courses/:id
+ * Get single course detail — unified format for Web & Mobile
+ */
 export const getCourseById = async (req: Request, res: Response) => {
   try {
     const { id } = req.params;
-    let userId: string | null = null;
 
-    // Optional Authentication to check enrollment
-    const token = req.header("Authorization")?.replace("Bearer ", "");
-    if (token) {
-      try {
-        const decoded = jwt.verify(token, JWT_SECRET) as { userId: string };
-        userId = decoded.userId;
-      } catch (err) {
-        // Ignore invalid token, treat as guest
-      }
-    }
-
-    // Enrollment check handled in service
-
-    const course = await getCourseCurriculumService(id, userId);
+    const course = await prisma.course.findUnique({
+      where: { id },
+      include: {
+        instructor: {
+          select: { id: true, full_name: true, avatar_url: true },
+        },
+        reviews: { select: { rating: true } },
+        tags: { include: { tag: true } },
+        modules: {
+          orderBy: { order_index: "asc" },
+          include: {
+            lessons: {
+              orderBy: { order_index: "asc" },
+              include: {
+                video: true,
+                resources: true,
+              },
+            },
+          },
+        },
+      },
+    });
 
     if (!course) {
       res.status(404).json({ error: "Course not found" });
       return;
     }
 
-    // Transform response to hide content if not enrolled
+    // Return the unified format (same structure as list)
+    res.json(formatCourse(course));
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: "Internal server error" });
+  }
+};
+
+/**
+ * GET /api/courses/:id/raw
+ * Get raw course data for dashboard editing/preview (NOT for mobile)
+ */
+export const getCourseByIdRaw = async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+
+    const course = await prisma.course.findUnique({
+      where: { id },
+      include: {
+        instructor: {
+          select: { id: true, full_name: true, avatar_url: true },
+        },
+        reviews: { select: { rating: true } },
+        tags: { include: { tag: true } },
+        modules: {
+          orderBy: { order_index: "asc" },
+          include: {
+            lessons: {
+              orderBy: { order_index: "asc" },
+              include: {
+                video: true,
+                resources: true,
+              },
+            },
+          },
+        },
+        _count: {
+          select: {
+            enrollments: true,
+            modules: true,
+          },
+        },
+      },
+    });
+
+    if (!course) {
+      res.status(404).json({ error: "Course not found" });
+      return;
+    }
+
+    // Return raw Prisma data as-is
     res.json(course);
   } catch (error) {
     console.error(error);
@@ -167,10 +232,17 @@ export const listInstructorCourses = async (
       return;
     }
 
+    const { search } = req.query;
+
     // Admin can see all, Instructor sees only theirs
     const where: any = {};
     if (req.user?.role !== "admin") {
       where.instructor_id = userId;
+    }
+
+    // Add search filter
+    if (search) {
+      where.title = { contains: String(search) };
     }
 
     const courses = await prisma.course.findMany({
@@ -203,7 +275,6 @@ export const updateCourse = async (req: AuthRequest, res: Response) => {
     const { id } = req.params;
     const { title, description, price, image_url } = req.body;
 
-    // Check course exists and user owns it (or is admin)
     const course = await prisma.course.findUnique({ where: { id } });
     if (!course) {
       res.status(404).json({ error: "Course not found" });
@@ -267,7 +338,7 @@ export const toggleCourseStatus = async (req: AuthRequest, res: Response) => {
     }
 
     const { id } = req.params;
-    const { status } = req.body; // "PUBLISHED" or "DRAFT"
+    const { status } = req.body;
 
     if (!status || !["PUBLISHED", "DRAFT", "ARCHIVED"].includes(status)) {
       res.status(400).json({

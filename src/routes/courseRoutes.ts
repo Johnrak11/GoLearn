@@ -3,6 +3,7 @@ import {
   createCourse,
   getCourses,
   getCourseById,
+  getCourseByIdRaw,
   listInstructorCourses,
   updateCourse,
   deleteCourse,
@@ -148,6 +149,29 @@ router.post("/", authenticate, createCourse);
  *         description: Course not found
  */
 router.get("/:id", getCourseById);
+
+/**
+ * @swagger
+ * /courses/{id}/raw:
+ *   get:
+ *     summary: Get raw course data (internal use)
+ *     description: Returns raw Prisma course data for dashboard/edit views.
+ *     tags: [Courses]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *     responses:
+ *       200:
+ *         description: Raw course data
+ *       404:
+ *         description: Course not found
+ */
+router.get("/:id/raw", authenticate, getCourseByIdRaw);
 
 /**
  * @swagger
