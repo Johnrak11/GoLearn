@@ -59,22 +59,64 @@ export const createCourse = async (req: AuthRequest, res: Response) => {
 
 export const getCourses = async (req: Request, res: Response) => {
   try {
-    const { search } = req.query;
-
-    const whereClause: any = {
-      status: "PUBLISHED",
-    };
-
-    if (search) {
-      whereClause.title = {
-        contains: String(search),
-      };
-    }
+    const { search, category, format } = req.query;
 
     const courses = await listPublishedCoursesService(
       search as string | undefined,
+      category as string | undefined,
     );
 
+    // If mobile format requested, transform the response
+    if (format === "mobile") {
+      const mobileCourses = courses.map((course: any) => {
+        const totalRating = course.reviews.reduce(
+          (acc: number, review: any) => acc + review.rating,
+          0,
+        );
+        const avgRating =
+          course.reviews.length > 0
+            ? parseFloat((totalRating / course.reviews.length).toFixed(1))
+            : 0.0;
+
+        return {
+          id: course.id,
+          course_image: course.thumbnail_url || "",
+          preview_video: course.thumbnail_url || "",
+          title: course.title,
+          instructor: {
+            name: course.instructor.full_name,
+            rating: avgRating,
+          },
+          curriculum: course.modules.map((module: any) => ({
+            module_id: module.id,
+            title: module.title,
+            lessons: module.lessons.map((lesson: any) => ({
+              id: lesson.id,
+              title: lesson.title,
+              type: lesson.type.toLowerCase(),
+              duration_minutes: lesson.video
+                ? Math.round(lesson.video.duration / 60)
+                : 0,
+              video_url: lesson.video?.url || "",
+              resources: lesson.resources?.map((r: any) => r.file_url) || [],
+            })),
+          })),
+          pricing: {
+            amount: Number(course.price),
+            currency: "USD",
+            discount_available: course.compare_at_price
+              ? Number(course.compare_at_price) > Number(course.price)
+              : false,
+          },
+          tags: course.tags.map((t: any) => t.tag.name),
+        };
+      });
+
+      res.json(mobileCourses);
+      return;
+    }
+
+    // Default: return standard web format
     res.json(courses);
   } catch (error) {
     res.status(500).json({ error: "Internal server error" });
@@ -228,11 +270,9 @@ export const toggleCourseStatus = async (req: AuthRequest, res: Response) => {
     const { status } = req.body; // "PUBLISHED" or "DRAFT"
 
     if (!status || !["PUBLISHED", "DRAFT", "ARCHIVED"].includes(status)) {
-      res
-        .status(400)
-        .json({
-          error: "Invalid status. Must be PUBLISHED, DRAFT, or ARCHIVED",
-        });
+      res.status(400).json({
+        error: "Invalid status. Must be PUBLISHED, DRAFT, or ARCHIVED",
+      });
       return;
     }
 

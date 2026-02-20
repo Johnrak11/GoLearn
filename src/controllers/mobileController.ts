@@ -5,10 +5,32 @@ const prisma = new PrismaClient();
 
 export const getMobileCourses = async (req: Request, res: Response) => {
   try {
+    const { search, category } = req.query;
+
+    const where: any = {
+      status: "PUBLISHED",
+    };
+
+    if (search) {
+      where.title = {
+        contains: String(search),
+      };
+    }
+
+    if (category) {
+      where.tags = {
+        some: {
+          tag: {
+            name: {
+              equals: String(category),
+            },
+          },
+        },
+      };
+    }
+
     const courses = await prisma.course.findMany({
-      where: {
-        status: "PUBLISHED",
-      },
+      where,
       include: {
         instructor: {
           select: {

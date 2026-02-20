@@ -71,10 +71,24 @@ async function main() {
   });
   console.log("✅ Created Student: student@example.com");
 
+  // 2.5 Create Tags
+  const tags = ["Development", "Business", "Design", "Marketing"];
+  for (const tagName of tags) {
+    await prisma.tag.upsert({
+      where: { name: tagName },
+      update: {},
+      create: { name: tagName },
+    });
+  }
+  console.log("✅ Created Tags");
+
   // 3. Create 5 Courses with 10 Lessons each
   for (let i = 1; i <= 5; i++) {
     const title = `Course ${i}: Mastery Series`;
     const slug = `course-${i}-mastery`;
+
+    // Assign a random tag
+    const randomTag = tags[Math.floor(Math.random() * tags.length)];
 
     // Check if course exists first to avoid complex upsert with nested relations
     const existingCourse = await prisma.course.findUnique({
@@ -90,6 +104,13 @@ async function main() {
           description: `This is the detailed description for Course ${i}.`,
           price: 49.99 + i * 10,
           status: "PUBLISHED",
+          tags: {
+            create: {
+              tag: {
+                connect: { name: randomTag },
+              },
+            },
+          },
           modules: {
             create: [
               {
@@ -125,9 +146,25 @@ async function main() {
           },
         },
       });
-      console.log(`✅ Created Course ${i}: ${course.title}`);
+      console.log(
+        `✅ Created Course ${i}: ${course.title} [Tag: ${randomTag}]`,
+      );
     } else {
-      console.log(`ℹ️ Course ${i} already exists, skipping.`);
+      // If course exists, ensure it has a tag for testing
+      await prisma.course.update({
+        where: { slug },
+        data: {
+          tags: {
+            deleteMany: {}, // Clear existing tags to avoid duplicates/errors in this simple seed
+            create: {
+              tag: {
+                connect: { name: randomTag },
+              },
+            },
+          },
+        },
+      });
+      console.log(`ℹ️ Course ${i} exists. Updated tag to: ${randomTag}`);
     }
   }
 

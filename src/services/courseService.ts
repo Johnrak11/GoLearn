@@ -26,13 +26,46 @@ export async function createCourseService(params: {
   return course;
 }
 
-export async function listPublishedCoursesService(search?: string) {
+export async function listPublishedCoursesService(
+  search?: string,
+  category?: string,
+) {
   const where: any = { status: "PUBLISHED" };
-  if (search) where.title = { contains: String(search) };
+
+  if (search) {
+    where.title = { contains: String(search) };
+  }
+
+  if (category) {
+    where.tags = {
+      some: {
+        tag: {
+          name: {
+            equals: category,
+          },
+        },
+      },
+    };
+  }
+
   const courses = await prisma.course.findMany({
     where,
     include: {
       instructor: { select: { full_name: true, avatar_url: true } },
+      reviews: { select: { rating: true } },
+      tags: { include: { tag: true } },
+      modules: {
+        orderBy: { order_index: "asc" },
+        include: {
+          lessons: {
+            orderBy: { order_index: "asc" },
+            include: {
+              video: true,
+              resources: true,
+            },
+          },
+        },
+      },
     },
   });
   return courses;

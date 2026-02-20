@@ -6,7 +6,6 @@ import quizRoutes from "./quizRoutes";
 import forumRoutes from "./forumRoutes";
 import enrollmentRoutes from "./enrollmentRoutes";
 import userRoutes from "./userRoutes";
-import mobileRoutes from "./mobileRoutes";
 
 const router = express.Router();
 
@@ -17,6 +16,5 @@ router.use("/progress", progressRoutes);
 router.use("/quizzes", quizRoutes);
 router.use("/forum", forumRoutes);
 router.use("/enrollments", enrollmentRoutes);
-router.use("/mobile", mobileRoutes);
 
 export default router;
