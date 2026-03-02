@@ -84,11 +84,16 @@ async function main() {
 
   // 3. Create 5 Courses with 10 Lessons each
   for (let i = 1; i <= 5; i++) {
-    const title = `Course ${i}: Mastery Series`;
-    const slug = `course-${i}-mastery`;
+    const isCourse5 = i === 5;
+    const title = isCourse5
+      ? "Java Advance level"
+      : `Course ${i}: Mastery Series`;
+    const slug = isCourse5 ? "course-5-mastery" : `course-${i}-mastery`;
 
     // Assign a random tag
-    const randomTag = tags[Math.floor(Math.random() * tags.length)];
+    const assignedTag = isCourse5
+      ? "Design"
+      : tags[Math.floor(Math.random() * tags.length)];
 
     // Check if course exists first to avoid complex upsert with nested relations
     const existingCourse = await prisma.course.findUnique({
@@ -102,29 +107,41 @@ async function main() {
           title: title,
           slug: slug,
           description: `This is the detailed description for Course ${i}.`,
-          price: 49.99 + i * 10,
+          thumbnail_url:
+            "https://res.cloudinary.com/dbp9s9ojl/image/upload/v1771571409/n22xxzfpwuwgikiyzz06.png",
+          price: isCourse5 ? 99.99 : 49.99 + i * 10,
+          language: "en",
+          level: "BEGINNER",
           status: "PUBLISHED",
           tags: {
             create: {
               tag: {
-                connect: { name: randomTag },
+                connect: { name: assignedTag },
               },
             },
           },
           modules: {
             create: [
               {
-                title: "Module 1: Introduction",
+                title: "Introduction",
                 order_index: 1,
                 lessons: {
                   create: Array.from({ length: 5 }).map((_, j) => ({
-                    title: `Lesson ${j + 1}: Basics`,
+                    title:
+                      isCourse5 && j === 0
+                        ? "Lesson 1: Basics syntax"
+                        : `Lesson ${j + 1}: Basics`,
                     type: "VIDEO",
                     order_index: j + 1,
+                    is_free_preview: false,
                     video: {
                       create: {
                         provider: "MUX",
-                        url: `https://mux.com/assets/video_${i}_${j}`,
+                        status: "READY",
+                        url:
+                          isCourse5 && j === 0
+                            ? "https://res.cloudinary.com/dbp9s9ojl/video/upload/v1771580070/qm3jb6kasuzzlvxctgor.mp4"
+                            : "https://res.cloudinary.com/dbp9s9ojl/video/upload/v1771571508/lg6u7rcl2axcbaartr5j.mp4",
                         duration: 600,
                       },
                     },
@@ -132,13 +149,22 @@ async function main() {
                 },
               },
               {
-                title: "Module 2: Advanced Topics",
+                title: "Advanced Topics",
                 order_index: 2,
                 lessons: {
                   create: Array.from({ length: 5 }).map((_, j) => ({
                     title: `Lesson ${j + 6}: Deep Dive`,
-                    type: "TEXT",
+                    type: "VIDEO",
                     order_index: j + 6,
+                    is_free_preview: false,
+                    video: {
+                      create: {
+                        provider: "S3",
+                        status: "READY",
+                        url: "https://res.cloudinary.com/dbp9s9ojl/video/upload/v1771580214/vn49yq2zdckp6braqvdz.mp4",
+                        duration: 0,
+                      },
+                    },
                   })),
                 },
               },
@@ -147,24 +173,32 @@ async function main() {
         },
       });
       console.log(
-        `✅ Created Course ${i}: ${course.title} [Tag: ${randomTag}]`,
+        `✅ Created Course ${i}: ${course.title} [Tag: ${assignedTag}]`,
       );
     } else {
       // If course exists, ensure it has a tag for testing
       await prisma.course.update({
         where: { slug },
         data: {
+          title: title,
+          thumbnail_url:
+            "https://res.cloudinary.com/dbp9s9ojl/image/upload/v1771571409/n22xxzfpwuwgikiyzz06.png",
+          price: isCourse5 ? 99.99 : 49.99 + i * 10,
+          language: "en",
+          level: "BEGINNER",
           tags: {
             deleteMany: {}, // Clear existing tags to avoid duplicates/errors in this simple seed
             create: {
               tag: {
-                connect: { name: randomTag },
+                connect: { name: assignedTag },
               },
             },
           },
         },
       });
-      console.log(`ℹ️ Course ${i} exists. Updated tag to: ${randomTag}`);
+      console.log(
+        `ℹ️ Course ${i} exists. Updated course fields and tag to: ${assignedTag}`,
+      );
     }
   }
 

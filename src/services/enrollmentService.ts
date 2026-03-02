@@ -72,11 +72,7 @@ export const enrollUser = async (userId: string, courseId: string) => {
     throw new Error("User already enrolled");
   }
 
-  // 3. Check price (Simple logic: Free courses only for direct enroll)
-  // TODO: Add payment verification for paid courses
-  if (Number(course.price) > 0) {
-    throw new Error("Cannot directly enroll in paid course. Payment required.");
-  }
+  // Note: Payment check removed — all courses allow direct enrollment for now
 
   // 4. Create enrollment
   const enrollment = await prisma.enrollment.create({

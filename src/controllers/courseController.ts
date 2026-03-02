@@ -195,6 +195,9 @@ export const getCourseByIdRaw = async (req: Request, res: Response) => {
               include: {
                 video: true,
                 resources: true,
+                quiz: {
+                  select: { id: true, title: true, passing_score: true },
+                },
               },
             },
           },

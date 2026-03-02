@@ -23,6 +23,11 @@ model User {
   headline        String?   // e.g. "Senior Software Engineer"
   bio             String?   @db.Text
   avatar_url      String?
+  phone           String?
+  date_of_birth   DateTime?
+  gender          String?   // "male", "female", "other"
+  skills          String?   @db.Text
+  address         String?   @db.Text
   timezone        String?   @default("UTC")
   
   is_verified     Boolean   @default(false)
