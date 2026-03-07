@@ -130,7 +130,7 @@ router.post("/", authenticate, createCourse);
 
 /**
  * @swagger
- * /courses/{id}:
+ * /courses/{id}/user/{userId}:
  *   get:
  *     summary: Get course details by ID
  *     description: Returns full course details with curriculum. Locked content is hidden for non-enrolled users.
@@ -142,13 +142,19 @@ router.post("/", authenticate, createCourse);
  *         schema:
  *           type: string
  *         description: Course UUID
+ *       - in: path
+ *         name: userId
+ *         required: false
+ *         schema:
+ *           type: string
+ *         description: (Optional) User ID to check enrollment status and show locked content if enrolled
  *     responses:
  *       200:
  *         description: Course details
  *       404:
  *         description: Course not found
  */
-router.get("/:id", getCourseById);
+router.get("/:id/user/:userId", getCourseById);
 
 /**
  * @swagger

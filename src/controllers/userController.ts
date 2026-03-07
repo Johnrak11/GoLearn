@@ -227,9 +227,9 @@ export const getMe = async (req: AuthRequest, res: Response) => {
       bio: user.bio,
       avatar_url: user.avatar_url,
       phone: user.phone,
-      date_of_birth: user.date_of_birth,
+      dob: user.date_of_birth ? user.date_of_birth.toISOString().split("T")[0] : null,
       gender: user.gender,
-      skills: user.skills,
+      skills: user.skills ? user.skills.split(",") : [],
       address: user.address,
       timezone: user.timezone,
       status: user.status,
@@ -264,22 +264,26 @@ export const updateMe = async (req: AuthRequest, res: Response) => {
       return;
     }
 
-    const data = updateMeSchema.parse(req.body);
 
-    const updateData: any = {};
-    if (data.full_name) updateData.full_name = data.full_name;
-    if (data.email) updateData.email = data.email;
-    if (data.headline !== undefined) updateData.headline = data.headline;
-    if (data.bio !== undefined) updateData.bio = data.bio;
-    if (data.avatar_url !== undefined) updateData.avatar_url = data.avatar_url;
-    if (data.phone !== undefined) updateData.phone = data.phone;
-    if (data.date_of_birth !== undefined)
-      updateData.date_of_birth = data.date_of_birth
-        ? new Date(data.date_of_birth)
-        : null;
-    if (data.gender !== undefined) updateData.gender = data.gender;
-    if (data.skills !== undefined) updateData.skills = data.skills;
-    if (data.address !== undefined) updateData.address = data.address;
+    const payload = {
+      ...req.body,
+      skills: req.body.skills.join(","),
+      date_of_birth: req.body.dob ? new Date(req.body.dob).toISOString() : null,
+    }
+    const data = updateMeSchema.parse(payload);
+
+    const updateData: any = {
+      ...(data.full_name && { full_name: data.full_name }),
+      ...(data.email && { email: data.email }),
+      ...(data.avatar_url && { avatar_url: data.avatar_url }),
+      headline: data.headline,
+      bio: data.bio,
+      phone: data.phone,
+      date_of_birth: data.date_of_birth,
+      gender: data.gender,
+      skills: data.skills,
+      address: data.address
+    };
 
     const updatedUser = await prisma.user.update({
       where: { id: userId },

@@ -7,6 +7,7 @@ import {
   createCourseService,
   listPublishedCoursesService,
 } from "../services/courseService";
+import { checkEnrollment } from "../services/enrollmentService";
 
 const JWT_SECRET = process.env.JWT_SECRET || "supersecretkey";
 
@@ -66,6 +67,7 @@ function formatCourse(course: any) {
         : false,
     },
     tags: (course.tags || []).map((t: any) => t.tag?.name || t.name),
+    is_enrolled: course.isEnrolled,
   };
 }
 
@@ -133,7 +135,8 @@ export const getCourses = async (req: Request, res: Response) => {
  */
 export const getCourseById = async (req: Request, res: Response) => {
   try {
-    const { id } = req.params;
+    const { id, userId } = req.params;
+    const isEnrolled = await checkEnrollment(userId, id);
 
     const course = await prisma.course.findUnique({
       where: { id },
@@ -164,7 +167,7 @@ export const getCourseById = async (req: Request, res: Response) => {
     }
 
     // Return the unified format (same structure as list)
-    res.json(formatCourse(course));
+    res.json(formatCourse({...course, isEnrolled}));
   } catch (error) {
     console.error(error);
     res.status(500).json({ error: "Internal server error" });
