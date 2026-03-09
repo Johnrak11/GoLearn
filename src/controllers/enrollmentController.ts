@@ -29,10 +29,7 @@ export const getMyEnrollments = async (req: AuthRequest, res: Response) => {
       status,
     );
 
-    res.json({
-      message: "Enrollments fetched successfully",
-      data: enrollments,
-    });
+    return res.json(enrollments);
   } catch (error: any) {
     console.error("Error fetching enrollments:", error);
     res.status(500).json({

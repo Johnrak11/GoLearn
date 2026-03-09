@@ -29,7 +29,6 @@ export const getMyEnrollments = async (
         include: {
           instructor: {
             select: {
-              id: true,
               full_name: true,
             },
           },
@@ -41,7 +40,18 @@ export const getMyEnrollments = async (
     },
   });
 
-  return enrollments;
+  // Normalize output: return instructor as the full name string only and format completed_at as a date
+  return enrollments.map((enrollment) => ({
+    ...enrollment,
+    completed_at: enrollment.completed_at
+      ? enrollment.completed_at.toISOString().split("T")[0]
+      : null,
+    course: {
+      ...enrollment.course,
+      course_image: enrollment.course.thumbnail_url || null,
+      instructor: { ...enrollment.course.instructor, name: enrollment.course.instructor.full_name },
+    },
+  }));
 };
 
 export const checkEnrollment = async (userId: string, courseId: string) => {

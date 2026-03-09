@@ -7,7 +7,6 @@ import {
   createCourseService,
   listPublishedCoursesService,
 } from "../services/courseService";
-import { checkEnrollment } from "../services/enrollmentService";
 
 const JWT_SECRET = process.env.JWT_SECRET || "supersecretkey";
 
@@ -22,7 +21,7 @@ const createCourseSchema = z.object({
 // Shared helper: transform a raw Prisma course
 // into the unified JSON format for Web & Mobile
 // =============================================
-function formatCourse(course: any) {
+function formatCourse(course: any, lessonProgress: Record<string, boolean> = {}) {
   // Calculate average instructor rating from reviews
   const totalRating = (course.reviews || []).reduce(
     (acc: number, review: any) => acc + review.rating,
@@ -54,6 +53,7 @@ function formatCourse(course: any) {
           ? Math.round(lesson.video.duration / 60)
           : 0,
         video_url: lesson.video?.url || "",
+        is_completed: lessonProgress[lesson.id] ?? false,
         ...(lesson.resources?.length > 0 && {
           resources: lesson.resources.map((r: any) => r.title),
         }),
@@ -68,6 +68,7 @@ function formatCourse(course: any) {
     },
     tags: (course.tags || []).map((t: any) => t.tag?.name || t.name),
     is_enrolled: course.isEnrolled,
+    progress_pct: typeof course.progress_pct === "number" ? course.progress_pct : 0,
   };
 }
 
@@ -122,7 +123,7 @@ export const getCourses = async (req: Request, res: Response) => {
     );
 
     // Always return the unified format
-    const formatted = courses.map(formatCourse);
+    const formatted = courses.map((course) => formatCourse(course));
     res.json(formatted);
   } catch (error) {
     res.status(500).json({ error: "Internal server error" });
@@ -136,7 +137,53 @@ export const getCourses = async (req: Request, res: Response) => {
 export const getCourseById = async (req: Request, res: Response) => {
   try {
     const { id, userId } = req.params;
-    const isEnrolled = await checkEnrollment(userId, id);
+
+    // Determine enrollment + progress for provided userId (if any)
+    let isEnrolled = false;
+    let enrollmentProgressPct = 0;
+    let lessonProgressMap: Record<string, boolean> = {};
+
+    if (userId) {
+      const enrollment = await prisma.enrollment.findUnique({
+        where: {
+          user_id_course_id: {
+            user_id: userId,
+            course_id: id,
+          },
+        },
+        select: {
+          id: true,
+        },
+      });
+
+      if (enrollment) {
+        isEnrolled = true;
+
+        // Calculate progress based on total lessons across all modules
+        const totalLessons = await prisma.lesson.count({
+          where: { module: { course_id: id } },
+        });
+        const completedLessons = await prisma.lessonProgress.count({
+          where: { enrollment_id: enrollment.id, is_completed: true },
+        });
+
+        enrollmentProgressPct =
+          totalLessons > 0 ? (completedLessons / totalLessons) * 100 : 0;
+
+        const progressRows = await prisma.lessonProgress.findMany({
+          where: { enrollment_id: enrollment.id },
+          select: { lesson_id: true, is_completed: true },
+        });
+
+        lessonProgressMap = progressRows.reduce(
+          (acc: Record<string, boolean>, row) => ({
+            ...acc,
+            [row.lesson_id]: row.is_completed,
+          }),
+          {},
+        );
+      }
+    }
 
     const course = await prisma.course.findUnique({
       where: { id },
@@ -167,7 +214,16 @@ export const getCourseById = async (req: Request, res: Response) => {
     }
 
     // Return the unified format (same structure as list)
-    res.json(formatCourse({...course, isEnrolled}));
+    res.json(
+      formatCourse(
+        {
+          ...course,
+          isEnrolled,
+          progress_pct: enrollmentProgressPct,
+        },
+        lessonProgressMap,
+      ),
+    );
   } catch (error) {
     console.error(error);
     res.status(500).json({ error: "Internal server error" });

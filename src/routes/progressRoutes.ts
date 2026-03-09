@@ -1,5 +1,8 @@
 import express from "express";
-import { updateProgress } from "../controllers/progressController";
+import {
+    updateCourseProgress,
+    updateProgress,
+} from "../controllers/progressController";
 import { authenticate } from "../middlewares/authMiddleware";
 
 const router = express.Router();
@@ -40,5 +43,37 @@ const router = express.Router();
  *         description: Progress updated
  */
 router.post("/update", authenticate, updateProgress);
+
+/**
+ * @swagger
+ * /progress/course:
+ *   post:
+ *     summary: Update course progress (mark lesson complete within a course)
+ *     tags: [Progress]
+ *     security:
+ *       - bearerAuth: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - course_id
+ *               - lesson_id
+ *             properties:
+ *               course_id:
+ *                 type: string
+ *               lesson_id:
+ *                 type: string
+ *               is_completed:
+ *                 type: boolean
+ *               last_watched_position:
+ *                 type: number
+ *     responses:
+ *       200:
+ *         description: Course progress updated
+ */
+router.patch("/course", authenticate, updateCourseProgress);
 
 export default router;

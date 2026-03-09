@@ -1,11 +1,22 @@
 import { Response } from "express";
-import { updateProgressService } from "../services/progressService";
+import {
+  updateCourseProgressService,
+  updateProgressService,
+} from "../services/progressService";
 import { AuthRequest } from "../middlewares/authMiddleware";
 import { z } from "zod";
 
 const updateProgressSchema = z.object({
   lesson_id: z.string().uuid(),
   is_completed: z.boolean(),
+  last_watched_position: z.number().min(0).optional(),
+});
+
+const updateCourseProgressSchema = z.object({
+  course_id: z.string().uuid(),
+  lesson_id: z.string().uuid(),
+  // Frontend may only send course_id + lesson_id to mark progress
+  is_completed: z.boolean().optional().default(true),
   last_watched_position: z.number().min(0).optional(),
 });
 
@@ -26,6 +37,34 @@ export const updateProgress = async (req: AuthRequest, res: Response) => {
       return;
     }
     res.json({ message: "Progress updated", ...result });
+  } catch (error) {
+    if (error instanceof z.ZodError) {
+      res.status(400).json({ error: (error as any).errors });
+    } else {
+      console.error(error);
+      res.status(500).json({ error: "Internal server error" });
+    }
+  }
+};
+
+export const updateCourseProgress = async (req: AuthRequest, res: Response) => {
+  try {
+    if (!req.user) return;
+    const { course_id, lesson_id, is_completed, last_watched_position } =
+      updateCourseProgressSchema.parse(req.body);
+    const userId = req.user.userId;
+    const result = await updateCourseProgressService({
+      userId,
+      courseId: course_id,
+      lesson_id,
+      is_completed,
+      last_watched_position,
+    });
+    if ((result as any).error) {
+      res.status(400).json(result);
+      return;
+    }
+    res.json({ message: "Course progress updated", ...result });
   } catch (error) {
     if (error instanceof z.ZodError) {
       res.status(400).json({ error: (error as any).errors });
