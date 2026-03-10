@@ -44,12 +44,15 @@ model User {
   reviews         Review[]
   forum_posts     ForumPost[]
   quiz_attempts   QuizAttempt[]
+  exam_attempts   ExamAttempt[]
   activity_logs   ActivityLog[]
   notifications   Notification[]
   instructor_courses Course[] @relation("InstructorCourses")
   refresh_tokens  RefreshToken[]
   wishlist        Wishlist[]
   certificates    Certificate[]
+  earning_records EarningRecord[]
+  withdrawal_requests WithdrawalRequest[]
   
   // Sales Relations
   coupon_redemptions CouponRedemption[]
@@ -141,6 +144,7 @@ model Course {
   wishlisted_by   Wishlist[]
   tags            CourseTag[]
   order_items     OrderItem[]
+  exam            Exam?
   
   @@index([instructor_id])
   @@index([status])
@@ -271,6 +275,7 @@ model Enrollment {
   user           User             @relation(fields: [user_id], references: [id])
   course         Course           @relation(fields: [course_id], references: [id])
   lesson_progress LessonProgress[]
+  exam_attempts  ExamAttempt[]
   certificate    Certificate?
   
   @@unique([user_id, course_id])
@@ -366,6 +371,67 @@ model Certificate {
 }
 
 // ==========================================
+// 3b. Course Exam (Final Assessment)
+// ==========================================
+
+model Exam {
+  id            String   @id @default(uuid())
+  course_id     String   @unique
+  title         String
+  description   String?  @db.Text
+  passing_score Int      @default(70)
+  time_limit    Int?     // minutes, null = no limit
+
+  questions     ExamQuestion[]
+  attempts      ExamAttempt[]
+
+  course        Course   @relation(fields: [course_id], references: [id], onDelete: Cascade)
+
+  created_at    DateTime @default(now())
+  updated_at    DateTime @updatedAt
+}
+
+model ExamQuestion {
+  id       String   @id @default(uuid())
+  exam_id  String
+  prompt   String   @db.Text
+  type     QuestionType
+  points   Int      @default(1)
+
+  options  ExamOption[]
+
+  exam     Exam     @relation(fields: [exam_id], references: [id], onDelete: Cascade)
+}
+
+model ExamOption {
+  id          String  @id @default(uuid())
+  question_id String
+  text        String
+  is_correct  Boolean @default(false)
+
+  question    ExamQuestion @relation(fields: [question_id], references: [id], onDelete: Cascade)
+}
+
+model ExamAttempt {
+  id           String   @id @default(uuid())
+  exam_id      String
+  user_id      String
+  enrollment_id String
+
+  score        Int
+  passed       Boolean
+  answers_json Json?
+
+  attempted_at DateTime @default(now())
+
+  exam         Exam       @relation(fields: [exam_id], references: [id])
+  user         User       @relation(fields: [user_id], references: [id])
+  enrollment   Enrollment @relation(fields: [enrollment_id], references: [id])
+
+  @@index([exam_id, user_id])
+}
+
+// ==========================================
 // 4. Sales, Payments & Marketing
 // ==========================================
 
@@ -385,6 +451,7 @@ model Order {
   user            User        @relation(fields: [user_id], references: [id])
   items           OrderItem[]
   payment         Payment?
+  khqr_transaction PaymentTransaction?
   coupon_redemption CouponRedemption?
 }
 
@@ -424,6 +491,7 @@ enum PaymentProvider {
   STRIPE
   PAYPAL
   OFFLINE
+  KHQR
 }
 
 enum PaymentStatus {
@@ -431,6 +499,102 @@ enum PaymentStatus {
   SUCCESS
   FAILED
   REFUNDED
+  EXPIRED
+}
+
+// ------------------------------------------
+// KHQR Payment Transaction (Bakong)
+// ------------------------------------------
+model PaymentTransaction {
+  id            String              @id @default(uuid())
+  order_id      String              @unique
+  course_id     String
+  user_id       String
+
+  // From external KHQR API
+  md5           String              @unique // used for status polling
+  qr_string     String              @db.Text
+  payment_link  String?
+  external_order_id String?
+
+  status        PaymentTxStatus     @default(PENDING)
+  polling_stop  Boolean             @default(false)
+  paid_at       DateTime?
+
+  created_at    DateTime            @default(now())
+  updated_at    DateTime            @updatedAt
+
+  order         Order               @relation(fields: [order_id], references: [id])
+
+  @@index([md5])
+  @@index([order_id])
+}
+
+enum PaymentTxStatus {
+  PENDING
+  SUCCESS
+  FAILED
+  EXPIRED
+}
+
+// ------------------------------------------
+// Earnings (per enrollment — teacher share)
+// ------------------------------------------
+model EarningRecord {
+  id              String          @id @default(uuid())
+  enrollment_id   String          @unique
+  course_id       String
+  instructor_id   String
+
+  gross_amount    Decimal         @db.Decimal(10, 2) // full price student paid
+  platform_fee    Decimal         @db.Decimal(10, 2) // 20%
+  net_amount      Decimal         @db.Decimal(10, 2) // 80% → teacher
+
+  status          EarningStatus   @default(PENDING)
+  withdrawn_at    DateTime?
+
+  created_at      DateTime        @default(now())
+
+  instructor      User            @relation(fields: [instructor_id], references: [id])
+
+  @@index([instructor_id])
+}
+
+enum EarningStatus {
+  PENDING     // not yet requested
+  REQUESTED   // included in a withdrawal request
+  WITHDRAWN   // paid out
+}
+
+// ------------------------------------------
+// Withdrawal Requests (teacher → admin)
+// ------------------------------------------
+model WithdrawalRequest {
+  id              String              @id @default(uuid())
+  instructor_id   String
+
+  amount          Decimal             @db.Decimal(10, 2)
+  bank_name       String?             // e.g. "ABA", "ACLEDA"
+  account_number  String?
+  account_name    String?
+  note            String?             @db.Text
+
+  status          WithdrawalStatus    @default(PENDING)
+  admin_note      String?             @db.Text
+
+  requested_at    DateTime            @default(now())
+  reviewed_at     DateTime?
+
+  instructor      User                @relation(fields: [instructor_id], references: [id])
+
+  @@index([instructor_id])
+}
+
+enum WithdrawalStatus {
+  PENDING
+  APPROVED
+  REJECTED
+  PAID
 }
 
 model Coupon {

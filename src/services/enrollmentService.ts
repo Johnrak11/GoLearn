@@ -49,7 +49,10 @@ export const getMyEnrollments = async (
     course: {
       ...enrollment.course,
       course_image: enrollment.course.thumbnail_url || null,
-      instructor: { ...enrollment.course.instructor, name: enrollment.course.instructor.full_name },
+      instructor: {
+        ...enrollment.course.instructor,
+        name: enrollment.course.instructor.full_name,
+      },
     },
   }));
 };
@@ -82,9 +85,23 @@ export const enrollUser = async (userId: string, courseId: string) => {
     throw new Error("User already enrolled");
   }
 
-  // Note: Payment check removed — all courses allow direct enrollment for now
+  // 3. If course is paid, verify a completed payment exists
+  if (Number(course.price) > 0) {
+    const paidOrder = await prisma.order.findFirst({
+      where: {
+        user_id: userId,
+        status: "COMPLETED",
+        items: { some: { course_id: courseId } },
+      },
+    });
+    if (!paidOrder) {
+      throw new Error(
+        "Payment required. Please complete payment before enrolling.",
+      );
+    }
+  }
 
-  // 4. Create enrollment
+  // 4. Create enrollment (free courses enroll directly)
   const enrollment = await prisma.enrollment.create({
     data: {
       user_id: userId,
