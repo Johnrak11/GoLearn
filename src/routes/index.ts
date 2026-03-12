@@ -10,6 +10,7 @@ import examRoutes from "./examRoutes";
 import mobileRoutes from "./mobileRoutes";
 import paymentRoutes from "./paymentRoutes";
 import withdrawalRoutes from "./withdrawalRoutes";
+import paymentConfigRoutes from "./paymentConfigRoutes";
 
 const router = express.Router();
 
@@ -24,5 +25,6 @@ router.use("/enrollments", enrollmentRoutes);
 router.use("/payments", paymentRoutes);
 router.use("/withdrawals", withdrawalRoutes);
 router.use("/mobile", mobileRoutes);
+router.use("/admin/payment-config", paymentConfigRoutes);
 
 export default router;

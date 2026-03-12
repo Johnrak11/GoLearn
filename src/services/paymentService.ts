@@ -31,7 +31,9 @@ export async function initiatePaymentService(userId: string, courseId: string) {
   if (enrolled) return { error: "Already enrolled" };
 
   const amount = Number(course.price);
-  const orderId = `GL-${Date.now()}-${courseId.slice(0, 8)}`;
+  const timeStr = Date.now().toString().slice(-6);
+  const courseStr = courseId.slice(0, 4);
+  const orderId = `GL-${timeStr}-${courseStr}`;
 
   // Create Order
   const order = await prisma.order.create({
@@ -46,6 +48,9 @@ export async function initiatePaymentService(userId: string, courseId: string) {
     },
   });
 
+  // Fetch Payment Configuration
+  const paymentConfig = await prisma.paymentConfiguration.findFirst();
+
   // Call external KHQR API
   let khqrData: {
     qr_string: string;
@@ -54,23 +59,34 @@ export async function initiatePaymentService(userId: string, courseId: string) {
     order_id?: string;
   };
   try {
+    const payload: any = {
+      amount,
+      currency: "USD",
+      orderId,
+      merchant_name: paymentConfig?.merchantName || "GoLearn",
+      source_info: {
+        appIconUrl: "https://via.placeholder.com/150",
+        appName: "GoLearn",
+        appDeepLinkCallback: `golearn://payment/success?orderId=${order.id}`,
+      },
+    };
+
+    if (paymentConfig?.merchantCity)
+      payload.merchant_city = paymentConfig.merchantCity;
+    if (paymentConfig?.telegramChatId)
+      payload.telegram_chat_id = paymentConfig.telegramChatId;
+
     const response = await axios.post(
       `${KHQR_API_URL}/api/external/generate-qr`,
-      {
-        amount,
-        currency: "USD",
-        orderId,
-        merchant_name: "GoLearn",
-        merchant_city: "Phnom Penh",
-        source_info: {
-          appName: "GoLearn",
-          appDeepLinkCallback: `golearn://payment/success?orderId=${order.id}`,
-        },
-      },
+      payload,
       { headers: { "X-Api-Key": KHQR_API_KEY } },
     );
     khqrData = response.data;
-  } catch (err) {
+  } catch (err: any) {
+    console.error("--- KHQR API ERROR ---");
+    console.error(err?.response?.data || err?.message || err);
+    console.error("Payload sent:", JSON.stringify({ amount, orderId }));
+
     // Roll back order on KHQR failure
     await prisma.order.update({
       where: { id: order.id },

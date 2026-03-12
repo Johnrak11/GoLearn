@@ -597,6 +597,21 @@ enum WithdrawalStatus {
   PAID
 }
 
+// ------------------------------------------
+// Payment Configuration (Admin Settings)
+// ------------------------------------------
+model PaymentConfiguration {
+  id               Int      @id @default(1) // Single row configuration
+  bakongAccountId  String?  @db.VarChar(100)
+  merchantName     String?  @db.VarChar(100)
+  merchantCity     String?  @db.VarChar(100)
+  telegramChatId   String?  @db.VarChar(100)
+
+  updatedAt        DateTime @updatedAt
+
+  @@map("payment_configurations")
+}
+
 model Coupon {
   id              String    @id @default(uuid())
   code            String    @unique
