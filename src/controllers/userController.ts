@@ -2,6 +2,82 @@ import { Request, Response } from "express";
 import prisma from "../config/prisma";
 import { AuthRequest } from "../middlewares/authMiddleware";
 import { z } from "zod";
+import bcrypt from "bcryptjs";
+
+// ============ Admin: Create User ============
+const createUserSchema = z.object({
+  full_name: z.string().min(2),
+  email: z.string().email(),
+  password: z.string().min(6),
+  roles: z.array(z.string()).min(1),
+  status: z.enum(["ACTIVE", "INACTIVE", "BANNED", "PENDING"]).default("ACTIVE"),
+});
+
+export const createUser = async (req: Request, res: Response) => {
+  try {
+    const { full_name, email, password, roles, status } =
+      createUserSchema.parse(req.body);
+
+    const existingUser = await prisma.user.findUnique({ where: { email } });
+    if (existingUser) {
+      res.status(400).json({ error: "User with this email already exists" });
+      return;
+    }
+
+    const hashedPassword = await bcrypt.hash(password, 10);
+
+    const user = await prisma.user.create({
+      data: {
+        full_name,
+        email,
+        password_hash: hashedPassword,
+        status,
+        roles: {
+          create: await Promise.all(
+            roles.map(async (roleName) => {
+              const role = await prisma.role.findUnique({
+                where: { name: roleName },
+              });
+              if (!role) throw new Error(`Role ${roleName} not found`);
+              return {
+                role: {
+                  connect: { id: role.id },
+                },
+              };
+            }),
+          ),
+        },
+      },
+      include: {
+        roles: {
+          include: {
+            role: true,
+          },
+        },
+      },
+    });
+
+    res.status(201).json({
+      message: "User created successfully",
+      user: {
+        id: user.id,
+        full_name: user.full_name,
+        email: user.email,
+        status: user.status,
+        roles: user.roles.map((r: any) => r.role.name),
+      },
+    });
+  } catch (error) {
+    if (error instanceof z.ZodError) {
+      res.status(400).json({ error: (error as any).errors });
+    } else {
+      console.error(error);
+      res
+        .status(500)
+        .json({ error: (error as Error).message || "Internal server error" });
+    }
+  }
+};
 
 // ============ Admin: List Users ============
 export const listUsers = async (req: Request, res: Response) => {
@@ -227,7 +303,9 @@ export const getMe = async (req: AuthRequest, res: Response) => {
       bio: user.bio,
       avatar_url: user.avatar_url,
       phone: user.phone,
-      dob: user.date_of_birth ? user.date_of_birth.toISOString().split("T")[0] : null,
+      dob: user.date_of_birth
+        ? user.date_of_birth.toISOString().split("T")[0]
+        : null,
       gender: user.gender,
       skills: user.skills ? user.skills.split(",") : [],
       address: user.address,
@@ -264,12 +342,11 @@ export const updateMe = async (req: AuthRequest, res: Response) => {
       return;
     }
 
-
     const payload = {
       ...req.body,
       skills: req.body.skills.join(","),
       date_of_birth: req.body.dob ? new Date(req.body.dob).toISOString() : null,
-    }
+    };
     const data = updateMeSchema.parse(payload);
 
     const updateData: any = {
@@ -282,7 +359,7 @@ export const updateMe = async (req: AuthRequest, res: Response) => {
       date_of_birth: data.date_of_birth,
       gender: data.gender,
       skills: data.skills,
-      address: data.address
+      address: data.address,
     };
 
     const updatedUser = await prisma.user.update({

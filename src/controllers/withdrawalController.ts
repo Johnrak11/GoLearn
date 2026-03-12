@@ -2,11 +2,10 @@ import { Response } from "express";
 import { AuthRequest } from "../middlewares/authMiddleware";
 import { z } from "zod";
 import {
-  getMyEarningsService,
-  requestWithdrawalService,
   getMyWithdrawalsService,
   getAllWithdrawalsService,
   reviewWithdrawalService,
+  getAdminEarningsService,
 } from "../services/withdrawalService";
 
 const requestWithdrawalSchema = z.object({
@@ -28,10 +27,21 @@ export const getMyEarnings = async (req: AuthRequest, res: Response) => {
       res.status(401).json({ error: "Unauthorized" });
       return;
     }
-    const result = await getMyEarningsService(req.user.userId);
+    const roles = req.user.roles || [];
+    let result;
+    if (roles.includes("admin")) {
+      result = await getAdminEarningsService();
+    } else {
+      result = await getMyEarningsService(req.user.userId);
+    }
     res.json(result);
-  } catch {
-    res.status(500).json({ error: "Internal server error" });
+  } catch (error) {
+    console.error("--- ERROR IN getMyEarnings ---");
+    console.error(error);
+    res.status(500).json({
+      error: "Internal server error",
+      details: (error as Error).message,
+    });
   }
 };
 

@@ -6,6 +6,7 @@ import {
   deleteUser,
   getMe,
   updateMe,
+  createUser,
 } from "../controllers/userController";
 import { authenticate, authorize } from "../middlewares/authMiddleware";
 
@@ -128,6 +129,42 @@ router.get("/me", authenticate, getMe);
 router.patch("/me", authenticate, updateMe);
 
 // ============ Admin Routes ============
+
+/**
+ * @swagger
+ * /users:
+ *   post:
+ *     summary: Create user (Admin)
+ *     description: Admin can create new users (Student, Instructor, Admin).
+ *     tags: [Users]
+ *     security:
+ *       - bearerAuth: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               full_name:
+ *                 type: string
+ *               email:
+ *                 type: string
+ *               password:
+ *                 type: string
+ *               roles:
+ *                 type: array
+ *                 items:
+ *                   type: string
+ *               status:
+ *                 type: string
+ *     responses:
+ *       201:
+ *         description: User created
+ *       400:
+ *         description: Validation error
+ */
+router.post("/", authenticate, authorize(["admin"]), createUser);
 
 /**
  * @swagger

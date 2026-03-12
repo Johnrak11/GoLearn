@@ -6,27 +6,121 @@ export async function getMyEarningsService(instructorId: string) {
     where: { instructor_id: instructorId },
     orderBy: { created_at: "desc" },
     include: {
-      instructor: { select: { full_name: true, email: true } },
+      enrollment: {
+        include: {
+          user: {
+            select: {
+              full_name: true,
+              avatar_url: true,
+            },
+          },
+        },
+      },
+      course: {
+        select: {
+          title: true,
+        },
+      },
     },
   });
 
   const summary = records.reduce(
     (acc, r) => ({
-      total_gross: acc.total_gross + Number(r.gross_amount),
-      total_net: acc.total_net + Number(r.net_amount),
-      pending:
+      totalGross: acc.totalGross + Number(r.gross_amount),
+      platformFee: acc.platformFee + Number(r.platform_fee),
+      netAvailable:
         r.status === "PENDING"
-          ? acc.pending + Number(r.net_amount)
-          : acc.pending,
-      withdrawn:
+          ? acc.netAvailable + Number(r.net_amount)
+          : acc.netAvailable,
+      pendingWithdrawal:
+        r.status === "REQUESTED"
+          ? acc.pendingWithdrawal + Number(r.net_amount)
+          : acc.pendingWithdrawal,
+      netWithdrawn:
         r.status === "WITHDRAWN"
-          ? acc.withdrawn + Number(r.net_amount)
-          : acc.withdrawn,
+          ? acc.netWithdrawn + Number(r.net_amount)
+          : acc.netWithdrawn,
     }),
-    { total_gross: 0, total_net: 0, pending: 0, withdrawn: 0 },
+    {
+      totalGross: 0,
+      platformFee: 0,
+      netAvailable: 0,
+      pendingWithdrawal: 0,
+      netWithdrawn: 0,
+    },
+  );
+  return {
+    summary,
+    records: records.map((r) => ({
+      ...r,
+      enrollment: r.enrollment || { user: { full_name: "Deleted Student" } },
+      course: r.course || { title: "Deleted Course" },
+    })),
+  };
+}
+
+// ============ Admin: Get Global Earnings Summary ============
+export async function getAdminEarningsService() {
+  const records = await prisma.earningRecord.findMany({
+    orderBy: { created_at: "desc" },
+    include: {
+      enrollment: {
+        include: {
+          user: {
+            select: {
+              full_name: true,
+              avatar_url: true,
+            },
+          },
+        },
+      },
+      course: {
+        select: {
+          title: true,
+        },
+      },
+      instructor: {
+        select: {
+          full_name: true,
+        },
+      },
+    },
+  });
+
+  const summary = records.reduce(
+    (acc, r) => ({
+      totalGross: acc.totalGross + Number(r.gross_amount),
+      platformFee: acc.platformFee + Number(r.platform_fee),
+      netAvailable:
+        r.status === "PENDING"
+          ? acc.netAvailable + Number(r.net_amount)
+          : acc.netAvailable,
+      pendingWithdrawal:
+        r.status === "REQUESTED"
+          ? acc.pendingWithdrawal + Number(r.net_amount)
+          : acc.pendingWithdrawal,
+      netWithdrawn:
+        r.status === "WITHDRAWN"
+          ? acc.netWithdrawn + Number(r.net_amount)
+          : acc.netWithdrawn,
+    }),
+    {
+      totalGross: 0,
+      platformFee: 0,
+      netAvailable: 0,
+      pendingWithdrawal: 0,
+      netWithdrawn: 0,
+    },
   );
 
-  return { summary, records };
+  return {
+    summary,
+    records: records.map((r) => ({
+      ...r,
+      enrollment: r.enrollment || { user: { full_name: "Deleted Student" } },
+      course: r.course || { title: "Deleted Course" },
+    })),
+  };
 }
 
 // ============ Teacher: Request Withdrawal ============

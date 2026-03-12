@@ -145,6 +145,7 @@ model Course {
   tags            CourseTag[]
   order_items     OrderItem[]
   exam            Exam?
+  earning_records EarningRecord[]
   
   @@index([instructor_id])
   @@index([status])
@@ -277,6 +278,7 @@ model Enrollment {
   lesson_progress LessonProgress[]
   exam_attempts  ExamAttempt[]
   certificate    Certificate?
+  earning_record EarningRecord?
   
   @@unique([user_id, course_id])
 }
@@ -556,8 +558,11 @@ model EarningRecord {
   created_at      DateTime        @default(now())
 
   instructor      User            @relation(fields: [instructor_id], references: [id])
+  enrollment      Enrollment?     @relation(fields: [enrollment_id], references: [id])
+  course          Course?         @relation(fields: [course_id], references: [id])
 
   @@index([instructor_id])
+  @@index([course_id])
 }
 
 enum EarningStatus {

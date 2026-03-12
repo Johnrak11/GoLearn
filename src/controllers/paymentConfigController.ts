@@ -14,10 +14,10 @@ export const getPaymentConfig = async (
       config = await prisma.paymentConfiguration.create({
         data: {
           id: 1,
-          bakongAccountId: "vorak_yun@bkrt",
-          merchantName: "Golearn",
-          merchantCity: "Phnom Penh",
-          telegramChatId: "-5146921694",
+          bakongAccountId: "",
+          merchantName: "",
+          merchantCity: "",
+          telegramChatId: "",
         },
       });
     }

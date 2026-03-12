@@ -135,8 +135,14 @@ export async function getPaymentStatusService(orderId: string, userId: string) {
   const order = await prisma.order.findFirst({
     where: { id: orderId, user_id: userId },
     include: {
+      items: true,
       khqr_transaction: {
-        select: { status: true, qr_string: true, payment_link: true },
+        select: {
+          status: true,
+          qr_string: true,
+          payment_link: true,
+          md5: true,
+        },
       },
     },
   });
