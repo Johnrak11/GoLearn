@@ -3,6 +3,10 @@ import prisma from "../config/prisma";
 import { AuthRequest } from "../middlewares/authMiddleware";
 import { z } from "zod";
 import bcrypt from "bcryptjs";
+import dayjs from 'dayjs';
+import customParseFormat from 'dayjs/plugin/customParseFormat.js';
+
+dayjs.extend(customParseFormat);
 
 // ============ Admin: Create User ============
 const createUserSchema = z.object({
@@ -345,7 +349,7 @@ export const updateMe = async (req: AuthRequest, res: Response) => {
     const payload = {
       ...req.body,
       skills: req.body.skills.join(","),
-      date_of_birth: req.body.dob ? new Date(req.body.dob).toISOString() : null,
+      date_of_birth: req.body.dob ? dayjs(req.body.dob, "D/M/YYYY").toISOString() : null,
     };
     const data = updateMeSchema.parse(payload);
 

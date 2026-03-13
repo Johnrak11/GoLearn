@@ -58,9 +58,7 @@ export const getExamByCourse = async (req: AuthRequest, res: Response) => {
       ["instructor", "admin"].includes(r),
     );
 
-    const exam = isInstructor
-      ? await getExamByCourseWithAnswersService(courseId)
-      : await getExamByCourseService(courseId);
+    const exam = await getExamByCourseWithAnswersService(courseId)
 
     if (!exam) {
       res.status(404).json({ error: "No exam found for this course" });
