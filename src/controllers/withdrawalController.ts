@@ -8,13 +8,22 @@ import {
   getAllWithdrawalsService,
   reviewWithdrawalService,
   getAdminEarningsService,
+  saveInstructorKHQRConfigService,
+  getInstructorKHQRConfigService,
+  generateWithdrawalKHQRService,
 } from "../services/withdrawalService";
 
 const requestWithdrawalSchema = z.object({
+  method: z.enum(["MANUAL", "KHQR"]).optional(),
   bank_name: z.string().optional(),
   account_number: z.string().optional(),
   account_name: z.string().optional(),
   note: z.string().optional(),
+});
+
+const khqrConfigSchema = z.object({
+  bakong_account_id: z.string().min(1, "Bakong Account ID is required"),
+  merchant_name: z.string().min(1, "Merchant Name is required"),
 });
 
 const reviewSchema = z.object({
@@ -112,6 +121,59 @@ export const reviewWithdrawal = async (req: AuthRequest, res: Response) => {
       res.status(400).json({ error: err.errors });
       return;
     }
+    res.status(500).json({ error: "Internal server error" });
+  }
+};
+
+// --- Instructor KHQR Config ---
+
+// POST /withdrawals/khqr-config — Teacher: save KHQR config
+export const saveKHQRConfig = async (req: AuthRequest, res: Response) => {
+  try {
+    if (!req.user) {
+      res.status(401).json({ error: "Unauthorized" });
+      return;
+    }
+    const body = khqrConfigSchema.parse(req.body);
+    const result = await saveInstructorKHQRConfigService({
+      instructorId: req.user.userId,
+      ...body,
+    });
+    res.json(result);
+  } catch (err) {
+    if (err instanceof z.ZodError) {
+      res.status(400).json({ error: err.errors });
+      return;
+    }
+    res.status(500).json({ error: "Internal server error" });
+  }
+};
+
+// GET /withdrawals/khqr-config — Teacher: get my KHQR config
+export const getKHQRConfig = async (req: AuthRequest, res: Response) => {
+  try {
+    if (!req.user) {
+      res.status(401).json({ error: "Unauthorized" });
+      return;
+    }
+    const result = await getInstructorKHQRConfigService(req.user.userId);
+    res.json(result);
+  } catch {
+    res.status(500).json({ error: "Internal server error" });
+  }
+};
+
+// GET /withdrawals/:id/khqr — Admin: generate teacher KHQR
+export const getWithdrawalKHQR = async (req: AuthRequest, res: Response) => {
+  try {
+    const { id } = req.params;
+    const result = await generateWithdrawalKHQRService(id);
+    if ((result as { error?: string }).error) {
+      res.status(400).json(result);
+      return;
+    }
+    res.json(result);
+  } catch (err: any) {
     res.status(500).json({ error: "Internal server error" });
   }
 };

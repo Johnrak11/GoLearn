@@ -5,6 +5,9 @@ import {
   getMyWithdrawals,
   getAllWithdrawals,
   reviewWithdrawal,
+  saveKHQRConfig,
+  getKHQRConfig,
+  getWithdrawalKHQR,
 } from "../controllers/withdrawalController";
 import { authenticate, authorize } from "../middlewares/authMiddleware";
 
@@ -174,5 +177,72 @@ router.get("/", authenticate, authorize(["admin"]), getAllWithdrawals);
  *         description: Withdrawal request updated
  */
 router.patch("/:id", authenticate, authorize(["admin"]), reviewWithdrawal);
+
+/**
+ * @swagger
+ * /withdrawals/khqr-config:
+ *   get:
+ *     summary: Get instructor KHQR configuration
+ *     tags: [Withdrawals]
+ *     security:
+ *       - bearerAuth: []
+ *     responses:
+ *       200:
+ *         description: KHQR configuration data
+ *   post:
+ *     summary: Save instructor KHQR configuration
+ *     tags: [Withdrawals]
+ *     security:
+ *       - bearerAuth: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - bakong_account_id
+ *               - merchant_name
+ *             properties:
+ *               bakong_account_id:
+ *                 type: string
+ *               merchant_name:
+ *                 type: string
+ *     responses:
+ *       200:
+ *         description: Configuration saved
+ */
+router.get(
+  "/khqr-config",
+  authenticate,
+  authorize(["instructor", "admin"]),
+  getKHQRConfig,
+);
+router.post(
+  "/khqr-config",
+  authenticate,
+  authorize(["instructor", "admin"]),
+  saveKHQRConfig,
+);
+
+/**
+ * @swagger
+ * /withdrawals/{id}/khqr:
+ *   get:
+ *     summary: Generate KHQR for teacher withdrawal (Admin)
+ *     tags: [Withdrawals]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *     responses:
+ *       200:
+ *         description: KHQR data
+ */
+router.get("/:id/khqr", authenticate, authorize(["admin"]), getWithdrawalKHQR);
 
 export default router;

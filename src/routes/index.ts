@@ -12,6 +12,7 @@ import paymentRoutes from "./paymentRoutes";
 import withdrawalRoutes from "./withdrawalRoutes";
 import statsRoutes from "./statsRoutes";
 import paymentConfigRoutes from "./paymentConfigRoutes";
+import tagRoutes from "./tagRoutes";
 
 const router = express.Router();
 
@@ -27,6 +28,7 @@ router.use("/payments", paymentRoutes);
 router.use("/withdrawals", withdrawalRoutes);
 router.use("/stats", statsRoutes);
 router.use("/mobile", mobileRoutes);
+router.use("/tags", tagRoutes);
 router.use("/admin/payment-config", paymentConfigRoutes);
 
 export default router;

@@ -6,6 +6,7 @@ export async function createCourseService(params: {
   description: string;
   price: number;
   thumbnail_url?: string;
+  tags?: string[];
 }) {
   const slugBase = params.title
     .toLowerCase()
@@ -21,6 +22,16 @@ export async function createCourseService(params: {
       price: params.price,
       thumbnail_url: params.thumbnail_url,
       status: "DRAFT",
+      tags: {
+        create: params.tags?.map((tagName) => ({
+          tag: {
+            connectOrCreate: {
+              where: { name: tagName },
+              create: { name: tagName },
+            },
+          },
+        })),
+      },
     },
   });
   return course;

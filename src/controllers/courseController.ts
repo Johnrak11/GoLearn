@@ -15,13 +15,17 @@ const createCourseSchema = z.object({
   description: z.string().min(10),
   price: z.number().min(0),
   thumbnail_url: z.string().url().optional(),
+  tags: z.array(z.string()).optional(),
 });
 
 // =============================================
 // Shared helper: transform a raw Prisma course
 // into the unified JSON format for Web & Mobile
 // =============================================
-function formatCourse(course: any, lessonProgress: Record<string, boolean> = {}) {
+function formatCourse(
+  course: any,
+  lessonProgress: Record<string, boolean> = {},
+) {
   // Calculate average instructor rating from reviews
   const totalRating = (course.reviews || []).reduce(
     (acc: number, review: any) => acc + review.rating,
@@ -68,7 +72,8 @@ function formatCourse(course: any, lessonProgress: Record<string, boolean> = {})
     },
     tags: (course.tags || []).map((t: any) => t.tag?.name || t.name),
     is_enrolled: course.isEnrolled,
-    progress_pct: typeof course.progress_pct === "number" ? course.progress_pct : 0,
+    progress_pct:
+      typeof course.progress_pct === "number" ? course.progress_pct : 0,
   };
 }
 
@@ -88,7 +93,7 @@ export const createCourse = async (req: AuthRequest, res: Response) => {
       return;
     }
 
-    const { title, description, price, thumbnail_url } =
+    const { title, description, price, thumbnail_url, tags } =
       createCourseSchema.parse(req.body);
 
     const course = await createCourseService({
@@ -97,6 +102,7 @@ export const createCourse = async (req: AuthRequest, res: Response) => {
       description,
       price,
       thumbnail_url,
+      tags,
     });
 
     res.status(201).json(course);
@@ -335,7 +341,7 @@ export const updateCourse = async (req: AuthRequest, res: Response) => {
     }
 
     const { id } = req.params;
-    const { title, description, price, image_url } = req.body;
+    const { title, description, price, image_url, tags } = req.body;
 
     const course = await prisma.course.findUnique({ where: { id } });
     if (!course) {
@@ -355,6 +361,19 @@ export const updateCourse = async (req: AuthRequest, res: Response) => {
         ...(description && { description }),
         ...(price !== undefined && { price: Number(price) }),
         ...(image_url && { thumbnail_url: image_url }),
+        ...(tags && {
+          tags: {
+            deleteMany: {},
+            create: tags.map((tagName: string) => ({
+              tag: {
+                connectOrCreate: {
+                  where: { name: tagName },
+                  create: { name: tagName },
+                },
+              },
+            })),
+          },
+        }),
       },
     });
 
