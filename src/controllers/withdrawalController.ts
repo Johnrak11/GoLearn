@@ -2,6 +2,8 @@ import { Response } from "express";
 import { AuthRequest } from "../middlewares/authMiddleware";
 import { z } from "zod";
 import {
+  getMyEarningsService,
+  requestWithdrawalService,
   getMyWithdrawalsService,
   getAllWithdrawalsService,
   reviewWithdrawalService,
